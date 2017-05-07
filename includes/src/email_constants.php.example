@@ -1,0 +1,11 @@
+<?php
+class email_constants
+{
+	public static $address = "address";
+	public static $password = "password";
+	public static $SMTPAuth = true;
+	public static $SMTPSecure = "smtp";
+	public static $port = "465";
+	public static $host = "smtp.gmail.com";
+	public static $connection = "ssl";
+}

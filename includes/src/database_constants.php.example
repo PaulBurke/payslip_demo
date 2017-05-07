@@ -1,0 +1,13 @@
+<?php
+class database_constants
+{
+	public static $user = "user";
+	public static $password "password";
+	public static $address = "address";
+	public static $database = "database";
+	public static $port = 3306;
+	public static $charset = "UTF8";
+}
+	
+
+	
