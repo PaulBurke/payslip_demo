@@ -1,18 +1,12 @@
 <?php
 
-class department_assignment extends dbObj
+class department_assignment extends dbStatusObj
 {
 	public $id;
 	public $empid;
 	public $dept_id;
 	public $dept_name;
 	public $date;
-
-	public $no_more_records = false;
-
-	public $cur_date;
-
-	private $stmt_status_at_date;
 
 	public function statusAtDate($date = false)
 	{
