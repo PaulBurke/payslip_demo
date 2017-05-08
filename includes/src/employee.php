@@ -19,7 +19,8 @@ class employee extends dbObj
 
 	private $status_dept;		
 	private $status_on_leave;	
-	private $shift_pattern;		
+	private $shift_pattern;
+	private $contract_details;
 
 	public function __construct($id = false, &$link = false)
 	{
@@ -182,4 +183,43 @@ class employee extends dbObj
 
 		return $this;		
 	}
+
+	public function getContractDetails($start, $end = false)
+	{
+		$cur_date = clone $start;
+
+		if(!$end)
+		{
+			$end = $start;
+		}
+
+		$one_day = new DateInterval("P1D"); //1 Day interval;
+
+		if(!$this->contract_details)
+		{
+			if(!$this->contract_details = new contract($this->link))
+			{
+				$this->error = $this->contract->error;
+				return false;
+			}
+		}
+
+		$this->contract_details->empid = $this->id;
+
+		while($cur_date <= $end)
+		{
+			if(!$this->contract_details->statusAtDate($cur_date))
+			{
+				$this->error = $this->contract_details->error;
+				return false;
+			}
+
+			$this->status[$cur_date->format("Y-m-d")]->contract = $this->contract_details->toObj();
+
+			$cur_date->add($one_day);
+		}
+
+		return $this;
+	}
+
 }
