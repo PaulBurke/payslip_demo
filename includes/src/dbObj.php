@@ -7,7 +7,9 @@ class dbObj
 	protected $link;
 	protected $stmt_read;
 
-	public function __construct(&$link)
+	public $error;
+
+	public function __construct(&$link = false)
 	{
 		if(!$link)
 		{
