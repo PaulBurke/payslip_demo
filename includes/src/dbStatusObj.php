@@ -9,8 +9,6 @@ class dbStatusObj extends dbObj
 
 	protected $stmt_status_at_date;
 
-	protected $obj_values = [];
-
 	public function statusAtDate($date = false)
 	{
 		if(!$date)
@@ -47,17 +45,5 @@ class dbStatusObj extends dbObj
 		$this->{$property} = new DateTime($this->date, system_constants::getTimezone());
 
 		return true;
-	}
-
-	public function toObj()
-	{
-		$obj = new stdClass;
-
-		foreach($this->obj_values as $ov)
-		{
-			$obj->{$ov} = $this->{$ov};
-		}
-
-		return $obj;
 	}
 }

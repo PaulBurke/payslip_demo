@@ -20,6 +20,7 @@ class employee extends dbObj
 	private $status_dept;		
 	private $status_on_leave;	
 	private $shift_pattern;
+	private $shift_pattern_detail;
 	private $contract_details;
 
 	public function __construct($id = false, &$link = false)
@@ -35,6 +36,12 @@ class employee extends dbObj
 			return $this->read();
 		}
 
+	}
+
+	public function get($id)
+	{
+		$this->id = $id;
+		return $this->read();
 	}
 
 	public function read()
@@ -156,6 +163,15 @@ class employee extends dbObj
 			}
 		}
 
+		if(!$this->shift_pattern_detail)
+		{
+			if(!$this->shift_pattern_detail = new shift_pattern_detail($this->link))
+			{
+				$this->error = $this->shift_pattern_detail->error;
+				return false;
+			}
+		}
+
 		while($cur_date <= $end)
 		{
 			$date = $cur_date->format("Y-m-d");
@@ -177,6 +193,14 @@ class employee extends dbObj
 			}
 
 			$this->status[$date]->shift_pattern_id = $this->shift_pattern->id;
+
+			if(!$this->shift_pattern_detail->get($this->shift_pattern->id, $cur_date))
+			{
+				$this->error = $this->shift_pattern_detail->error;
+				return false;
+			}
+
+			$this->status[$date]->shift_pattern = $this->shift_pattern_detail->toObj();
 
 			$cur_date->add($one_day);
 		}

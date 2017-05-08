@@ -9,6 +9,8 @@ class dbObj
 
 	public $error;
 
+	protected $obj_values = [];
+
 	public function __construct(&$link = false)
 	{
 		if(!$link)
@@ -46,5 +48,17 @@ class dbObj
 		$this->stmt_read->fetch();
 
 		return true;
+	}
+
+	public function toObj()
+	{
+		$obj = new stdClass;
+
+		foreach($this->obj_values as $ov)
+		{
+			$obj->{$ov} = $this->{$ov};
+		}
+
+		return $obj;
 	}
 }
