@@ -6,6 +6,7 @@ class errorAlert
 	public $script;
 	public $line;
 	public $log = true;
+	public $fatal = true;
 
 	public function json()
 	{
@@ -18,11 +19,13 @@ class errorAlert
 		$this->message = $message;
 		$this->script = $script;
 		$this->line = $line;
+
+		return $this;
 	}
 
 	public function __destruct()
 	{
-		if($log)
+		if($this->log)
 		{
 			error_log("Error $this->id || $this->message || Occured In $this->script on line $this->line");
 		}

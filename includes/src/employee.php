@@ -22,6 +22,9 @@ class employee extends dbObj
 	private $shift_pattern;
 	private $shift_pattern_detail;
 	private $contract_details;
+	private $attendance_base;
+
+	private $attendance_times = [];
 
 	public function __construct($id = false, &$link = false)
 	{
@@ -244,6 +247,86 @@ class employee extends dbObj
 		}
 
 		return $this;
+	}
+
+	public function getAttendance($start, $end = false)
+	{
+		$cur_date = clone $start;
+
+		if(!$end)
+		{
+			$end = $start;
+		}
+
+		$one_day = new DateInterval("P1D"); //1 Day interval;
+
+		if(!$this->attendance_base)
+		{
+			$this->attendance_base = new attendance;	
+		}
+
+		$this->attendance_base->empid = $this->id;
+
+		while($cur_date <= $end)
+		{
+			$date = $cur_date->format("Y-m-d");
+
+			if(!isset($this->status[$date]->shift_pattern))
+			{
+				$this->getShiftPatterns($start);
+			}
+
+			$this->attendance_base->shift_pattern = $this->status[$date]->shift_pattern;
+
+			if(!$attendance_times = $this->attendance_base->getAttendance($cur_date))
+			{
+				$this->error = $this->attendance_base->error;
+				return false;
+			}
+
+			$this->status[$date]->attendance = $attendance_times;
+
+			$cur_date->add($one_day);
+		}
+
+		return $this;
+
+	}
+
+	public function getPayroll($start, $end = false)
+	{
+		$cur_date = clone $start;
+
+		if(!$end)
+		{
+			$end = $start;
+		}
+
+		$one_day = new DateInterval("P1D"); //1 Day interval;
+
+		$weekday = $start->format("N");
+
+		
+
+		if($weekday != 1)
+		{
+			$interval = new DateInterval("P".($weekday-1)."D");
+
+			$previous_period_start = clone $start;
+			$previous_period_start->sub($interval);
+			$previous_period_end = clone $start;
+			$previous_period_end->sub($one_day);
+
+			if(!$this->getAttendance($previous_period_start, $previous_period_end))
+			{
+				return false;
+			}
+
+			if(!$this->getContractDetails($previous_period_start, $previous_period_end))
+			{
+				return false;
+			}
+		}
 	}
 
 }
