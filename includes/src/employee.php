@@ -204,6 +204,8 @@ class employee extends dbObj
 			}
 
 			$this->status[$date]->shift_pattern = $this->shift_pattern_detail->toObj();
+			$this->status[$date]->shift_pattern->workdays = $this->shift_pattern->workdays;
+			$this->status[$date]->shift_pattern->workdays_in_month = $this->shift_pattern->workdaysInMonth($cur_date);
 
 			$cur_date->add($one_day);
 		}
@@ -273,7 +275,10 @@ class employee extends dbObj
 
 			if(!isset($this->status[$date]->shift_pattern))
 			{
-				$this->getShiftPatterns($start);
+				if(!$this->getShiftPatterns($cur_date))
+				{
+					return false;
+				}
 			}
 
 			$this->attendance_base->shift_pattern = $this->status[$date]->shift_pattern;
@@ -306,11 +311,28 @@ class employee extends dbObj
 
 		$weekday = $start->format("N");
 
-		
+		$week_day_start = system_constants::$week_day_start;
 
-		if($weekday != 1)
+		/* 	If the first day of the payroll calculation is not the start of the work week then
+			We're going to have to back to the start of the work week to find out how many hours
+			have been worked so far.
+		*/
+
+		$weekly_rollup_hours = 0;
+		$monthly_rollup_hours = 0;
+		$attendance = 0; // Check to see if the employee has been in attendance this week to determine if the weekend should be paid.
+
+		if($weekday != $week_day_start)
 		{
-			$interval = new DateInterval("P".($weekday-1)."D");
+			$days = $weekday - $week_day_start;
+
+			if($days < 0)
+			{
+				// This rolls the day back around when outside bounds of 1-7
+				$days += 7;
+			}
+
+			$interval = new DateInterval("P".($days)."D");
 
 			$previous_period_start = clone $start;
 			$previous_period_start->sub($interval);
@@ -322,11 +344,237 @@ class employee extends dbObj
 				return false;
 			}
 
-			if(!$this->getContractDetails($previous_period_start, $previous_period_end))
+			while($previous_period_start <= $previous_period_end)
 			{
-				return false;
+				$date = $previous_period_start->format("Y-m-d");
+
+				$weekly_rollup_hours += $this->status[$date]->attendance->hours;
+				
+				if(!$this->status[$date]->attendance->no_records)
+				{
+					$attendance += 1;
+				}
+
+				$previous_period_start->add($one_day);
 			}
 		}
+
+		$currency_obj = new stdClass;
+		$currency_obj->value = 0;
+
+		$currency_values = ['code', 'symbol', 'decimal_places'];
+
+		foreach($currency_values as $cv)
+		{
+			$currency_obj->{$cv} = NULL;
+		}
+
+		$payroll_obj = new stdClass;
+
+		$payroll_obj->ot = 0;
+		$payroll_obj->st = 0;
+		$payroll_obj->st_value = NULL;
+		$payroll_obj->ot_value = NULL;
+		$payroll_obj->day_value = NULL;  // This is used for days off, holiday days or on leave days.
+
+		while($cur_date <= $end)
+		{
+			if($cur_date->format("N") == $week_day_start)
+			{
+				$attendance = 0;
+				$weekly_rollup_hours = 0;
+			}
+
+			$date = $cur_date->format("Y-m-d");
+			$days_in_month = intval($cur_date->format("t"));
+
+			$payroll_value = clone $payroll_obj;
+			$this->status[$date]->payroll = $payroll_value;
+
+			if($this->status[$date]->contract->workdays)
+			{
+				/*
+					For overtime purposes it's required to know the period over which the contractual hours should be worked.
+					If that period is not specified in the contract terms then it'll be necessary to figure it out from the 
+					days worked in the shift pattern.
+				*/
+
+				$workdays = $this->status[$date]->contract->workdays;
+
+			}else{
+				$workdays = $this->status[$date]->shift_pattern->workdays;
+			}
+
+			switch($this->status[$date]->contract->base_hours_recurrence)
+			{
+				// This is to get the basic hours for a single work day based on the contractual work hours.
+				// Overtime will represent an average work day.
+
+				case "Day":
+					$base_hours_multiple = 1;
+					$overtime_base_hours = 1;
+
+					if($this->status[$date]->contract->ot_eligible && $this->status[$date]->attendance->hours > 0)
+					{
+						if($this->status[$date]->shift_pattern->day_off || $this->status[$date]->shift_pattern->holiday)
+						{
+							$payroll_value->ot = $this->status[$date]->attendance->hours;
+						}else{
+							$payroll_value->ot = max(0, $this->status[$date]->attendance->hours - $this->status[$date]->contract->base_hours);
+							$payroll_value->st = $this->status[$date]->attendance->hours - $payroll_value->ot;
+						}
+
+					}else{
+						$payroll_value->st = $this->status[$date]->attendance->hours;
+					}
+
+					break;
+
+				case "Week":
+					$base_hours_multiple = 1/$workdays;
+					$overtime_base_hours = 1/$workdays;
+
+
+					$weekly_rollup_hours += $this->status[$date]->attendance->hours;
+
+					if($this->status[$date]->contract->ot_eligible)
+					{
+						$payroll_value->ot = max(0, $weekly_rollup_hours - $this->status[$date]->contract->base_hours);
+
+						print "rollup: $weekly_rollup_hours - Base Hours: ".$this->status[$date]->contract->base_hours."<br>";
+						$payroll_value->st = $this->status[$date]->attendance->hours - $payroll_value->ot;
+
+						$weekly_rollup_hours = min($weekly_rollup_hours,$this->status[$date]->contract->base_hours);
+					}else{
+
+						$payroll_value->st = $this->status[$date]->attendance->hours;
+
+					}
+
+
+					break;
+
+				case "Month":
+					$base_hours_multiple = 1/$this->status[$date]->shift_pattern->workdays_in_month;
+					$overtime_base_hours = 1/($workdays/7*365/12);
+
+					$monthly_rollup_hours += $this->status[$date]->attendance->hours;
+
+					if($this->status[$date]->contract->ot_eligible)
+					{
+						$payroll_value->ot = min(0, $monthly_rollup_hours - $this->status[$date]->contract->base_hours);
+						$payroll_value->st = $this->status[$date]->attendance->hours - $payroll_value->st;
+
+						$monthly_rollup_hours = $this->status[$date]->contract->base_hours;
+					}else{
+
+						$payroll_value->st = $this->status[$date]->attendance->hours;
+						
+					}
+
+					break;
+
+				default:
+					$this->error = new errorAlert("pay1", "Invalid base hours recurrence specified", $_SERVER['PHP_SELF'],__LINE__);
+					return false;
+			}
+
+			$base_hours = $this->status[$date]->contract->base_hours * $base_hours_multiple;
+
+			switch($this->status[$date]->contract->basic_recurrence)
+			// With this we're going t calculate a basic daily value.
+			// We'll need to calculate an average daily basic value for use with overtime.
+			{
+				case "Day":
+					$daily_basic_multiple = 1;
+					$overtime_basic_multiple = 1;
+					break;
+
+				case "Week":
+					$daily_basic_multiple = 1/$workdays;
+					$overtime_basic_multiple = 1/$workdays;
+					break;
+
+				case "Month":
+					$daily_basic_multiple = 1/$days_in_month;
+					$overtime_basic_multiple = 1/(365/12);
+					break;
+
+				default:
+					$this->error = new errorAlert("pay2", "Invalid basic salary recurrence specified", $_SERVER['PHP_SELF'],__LINE__);
+					return false;
+			}
+
+			$daily_basic = $this->status[$date]->contract->basic * $daily_basic_multiple;
+			$base_hours = $this->status[$date]->contract->base_hours * $base_hours_multiple;
+			$hourly_rate = $daily_basic/$base_hours;
+
+			$overtime_rate = $this->status[$date]->contract->basic * $overtime_basic_multiple/($this->status[$date]->contract->base_hours*$overtime_base_hours);
+
+
+			$currency_code = $this->status[$date]->contract->basic_currency_code;
+
+			if(!isset(${"currency_$currency_code"}))
+			{
+				${"currency_$currency_code"} = clone $currency_obj;
+
+				foreach($currency_values as $cv)
+				{
+					${"currency_$currency_code"}->{$cv} = $this->status[$date]->contract->{"basic_currency_$cv"};
+				}
+			}
+
+			if($this->status[$date]->attendance->no_records)
+			{
+				if($this->status[$date]->shift_pattern->day_off && $attendance)
+				{
+					$payroll_value->day_value = clone ${"currency_$currency_code"};
+					$payroll_value->day_value->value = $daily_basic;
+					$this->status[$date]->attendance->comment = "Day Off";
+
+				}else if($this->status[$date]->shift_pattern->holiday){
+
+					$payroll_value->day_value = clone ${"currency_$currency_code"};
+					$payroll_value->day_value->value = $daily_basic;
+					$this->status[$date]->attendance->comment = $this->status[$date]->shift_pattern->holiday_name;
+
+				}else if($this->status[$date]->on_leave){
+
+					if($this->status[$date]->contract->paid_leave)
+					{
+						$payroll_value->day_value = clone ${"currency_$currency_code"};
+						$payroll_value->day_value->value = $daily_basic;
+						$this->status[$date]->attendance->comment = "Paid Leave";
+					}else{
+						$this->status[$date]->attendance->comment = "Unpaid Leave";
+					}
+
+				}else{
+
+					$this->status[$date]->attendance->comment = "Absent";
+				}
+			}else{
+
+				$payroll_value->day_value = clone ${"currency_$currency_code"};
+				$payroll_value->day_value->value = $daily_basic;
+
+				if($this->status[$date]->contract->ot_eligible)
+				{
+					$payroll_value->ot_value = clone ${"currency_$currency_code"};
+					$payroll_value->ot_value->value = $payroll_value->ot * $overtime_rate;
+				}
+			}		
+
+			if(!$this->status[$date]->attendance->no_records)
+			{
+				$attendance += 1;
+			}
+
+
+			$cur_date->add($one_day);
+		}
+
+		return $this;
 	}
 
 }

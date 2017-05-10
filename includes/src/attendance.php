@@ -166,6 +166,7 @@ class attendance
 		$attendance_times->no_records = false;
 		$attendance_times->hours = 0;
 		$attendance_times->sign_in_cut_off = $sign_in_cut_off;
+		$attendance_times->comment = NULL;
 
 		foreach($this->time_types as $tt)
 		{
@@ -312,7 +313,7 @@ class attendance
 
 			$minutes = round(($hours - floor($hours))*60/15)/4;
 
-			$this->attendance_records->hours = number_format(floor($hours) + $minutes,2);
+			$this->attendance_records->hours = floor($hours) + $minutes;
 		}
 
 		return $this->attendance_records;
