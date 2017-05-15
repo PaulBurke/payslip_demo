@@ -167,6 +167,7 @@ class attendance
 		$attendance_times->hours = 0;
 		$attendance_times->sign_in_cut_off = $sign_in_cut_off;
 		$attendance_times->comment = NULL;
+		$attendance_times->late = false;
 
 		foreach($this->time_types as $tt)
 		{
@@ -232,6 +233,11 @@ class attendance
 			}
 		}
 
+		if($attendance_times->sign_in_cut_off && (!$attendance_times->day_start->time_obj || $attendance_times->sign_in_cut_off < $attendance_times->day_start->time_obj))
+		{
+			$attendance_times->late = true;
+		}
+
 		return $this->checkAttendance();
 	}
 
@@ -263,13 +269,13 @@ class attendance
 		$day_length = 0;
 		$lunch_length = 0;
 
-		if(!$this->attendance_records->day_start->time_obj && $this->attendance_records->lunch_start->time_obj)
+		if(!$this->attendance_records->day_start->time_obj && $this->attendance_records->lunch_start->time_obj && !$this->attendance_records->lunch_end->time_obj)
 		{
 			$this->attendance_records->day_start->time_obj = $this->attendance_records->lunch_start->time_obj;
 			$this->attendance_records->lunch_start->time_obj = NULL;
 		}
 
-		if(!$this->attendance_records->day_end->time_obj && $this->attendance_records->lunch_end->time_obj)
+		if(!$this->attendance_records->day_end->time_obj && $this->attendance_records->lunch_end->time_obj && !$this->attendance_records->lunch_start->time_obj)
 		{
 			$this->attendance_records->day_end->time_obj = $this->attendance_records->lunch_end->time_obj;
 			$this->attendance_records->lunch_end->time_obj = NULL;
@@ -286,6 +292,8 @@ class attendance
 
 			$lunch_interval = $this->timeToInterval($lunch_duration);
 			$lunch_length = timeToSeconds($lunch_duration);
+		}else{
+			$lunch_length = $this->attendance_records->lunch_end->time_obj->getTimestamp() - $this->attendance_records->lunch_start->time_obj->getTimestamp();
 		}
 
 		if($this->attendance_records->day_start->time_obj && $this->attendance_records->day_end->time_obj)
@@ -304,9 +312,9 @@ class attendance
 
 		if($day_length > 0)
 		{
-			if($day_length > $default_lunch_after + $lunch_length)
+			if($day_length > ($default_lunch_after + $lunch_length))
 			{
-				$day_length = $day_length - $lunch_length;
+				$day_length = max($default_lunch_after, $day_length - $lunch_length);
 			}
 
 			$hours = $day_length/60/60;

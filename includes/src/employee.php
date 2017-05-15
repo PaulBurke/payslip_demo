@@ -313,50 +313,49 @@ class employee extends dbObj
 
 		$week_day_start = system_constants::$week_day_start;
 
-		/* 	If the first day of the payroll calculation is not the start of the work week then
-			We're going to have to back to the start of the work week to find out how many hours
-			have been worked so far.
+		/* 	
+		We're going to backtrack by up to a week to the previous work week to get any past attendance for the upcoming weeked
+		and for calculating overtime for the weekly roll-up.
+
+		[Need to put something here for calculating monthly overtime should the start day not be the beginning of the month]
 		*/
 
 		$weekly_rollup_hours = 0;
 		$monthly_rollup_hours = 0;
 		$attendance = 0; // Check to see if the employee has been in attendance this week to determine if the weekend should be paid.
 
-		if($weekday != $week_day_start)
+		$days = $weekday - $week_day_start;
+
+		if($days < 1)
 		{
-			$days = $weekday - $week_day_start;
+			// Rolls the day back around when outside bounds of 1-7
+			$days += 7;
+		}
 
-			if($days < 0)
+		$interval = new DateInterval("P".($days)."D");
+
+		$previous_period_start = clone $start;
+		$previous_period_start->sub($interval);
+		$previous_period_end = clone $start;
+		$previous_period_end->sub($one_day);
+
+		if(!$this->getAttendance($previous_period_start, $previous_period_end))
+		{
+			return false;
+		}
+
+		while($previous_period_start <= $previous_period_end)
+		{
+			$date = $previous_period_start->format("Y-m-d");
+
+			$weekly_rollup_hours += $this->status[$date]->attendance->hours;
+			
+			if(!$this->status[$date]->attendance->no_records)
 			{
-				// This rolls the day back around when outside bounds of 1-7
-				$days += 7;
+				$attendance += 1;
 			}
 
-			$interval = new DateInterval("P".($days)."D");
-
-			$previous_period_start = clone $start;
-			$previous_period_start->sub($interval);
-			$previous_period_end = clone $start;
-			$previous_period_end->sub($one_day);
-
-			if(!$this->getAttendance($previous_period_start, $previous_period_end))
-			{
-				return false;
-			}
-
-			while($previous_period_start <= $previous_period_end)
-			{
-				$date = $previous_period_start->format("Y-m-d");
-
-				$weekly_rollup_hours += $this->status[$date]->attendance->hours;
-				
-				if(!$this->status[$date]->attendance->no_records)
-				{
-					$attendance += 1;
-				}
-
-				$previous_period_start->add($one_day);
-			}
+			$previous_period_start->add($one_day);
 		}
 
 		$currency_obj = new stdClass;
@@ -387,6 +386,7 @@ class employee extends dbObj
 
 			$date = $cur_date->format("Y-m-d");
 			$days_in_month = intval($cur_date->format("t"));
+
 
 			$payroll_value = clone $payroll_obj;
 			$this->status[$date]->payroll = $payroll_value;
@@ -440,8 +440,6 @@ class employee extends dbObj
 					if($this->status[$date]->contract->ot_eligible)
 					{
 						$payroll_value->ot = max(0, $weekly_rollup_hours - $this->status[$date]->contract->base_hours);
-
-						print "rollup: $weekly_rollup_hours - Base Hours: ".$this->status[$date]->contract->base_hours."<br>";
 						$payroll_value->st = $this->status[$date]->attendance->hours - $payroll_value->ot;
 
 						$weekly_rollup_hours = min($weekly_rollup_hours,$this->status[$date]->contract->base_hours);
@@ -524,11 +522,14 @@ class employee extends dbObj
 				}
 			}
 
+			$payroll_value->day_value = clone ${"currency_$currency_code"};
+
 			if($this->status[$date]->attendance->no_records)
 			{
-				if($this->status[$date]->shift_pattern->day_off && $attendance)
+				if($this->status[$date]->shift_pattern->day_off && ($attendance || $this->checkLastWeekAttendance($cur_date)))
 				{
-					$payroll_value->day_value = clone ${"currency_$currency_code"};
+					// If there was attendance during the week then pay the weekend.
+
 					$payroll_value->day_value->value = $daily_basic;
 					$this->status[$date]->attendance->comment = "Day Off";
 
@@ -553,17 +554,34 @@ class employee extends dbObj
 
 					$this->status[$date]->attendance->comment = "Absent";
 				}
-			}else{
+			}else{		
 
 				$payroll_value->day_value = clone ${"currency_$currency_code"};
 				$payroll_value->day_value->value = $daily_basic;
 
+				if($this->status[$date]->shift_pattern->day_off)
+				{
+					$this->status[$date]->attendance->comment = "Day Off";
+				}else if($this->status[$date]->shift_pattern->holiday){
+					$this->status[$date]->attendance->comment = $this->status[$date]->shift_pattern->holiday_name;
+				}
+
 				if($this->status[$date]->contract->ot_eligible)
 				{
 					$payroll_value->ot_value = clone ${"currency_$currency_code"};
-					$payroll_value->ot_value->value = $payroll_value->ot * $overtime_rate;
+					$payroll_value->ot_value->value = $payroll_value->ot * $overtime_rate * $this->status[$date]->contract->ot_multiplier;
 				}
-			}		
+			}
+
+			if(!$this->status[$date]->shift_pattern->day_off && $this->status[$date]->attendance->late)
+			{
+				if(!$this->status[$date]->attendance->comment)
+				{
+					$this->status[$date]->attendance->comment = "Late";
+				}else{
+					$this->status[$date]->attendance->comment = "Late - ".$this->status[$date]->attendance->comment;
+				}
+			}
 
 			if(!$this->status[$date]->attendance->no_records)
 			{
@@ -575,6 +593,51 @@ class employee extends dbObj
 		}
 
 		return $this;
+	}
+
+	public function checkLastWeekAttendance($date = false)
+	{
+		if(!$date)
+		{
+			$date = new date("now", system_constants::getTimezone());
+		}else{
+			$date = clone $date;
+		}
+
+		$one_day = new DateInterval("P1D");
+
+		$attendance = 0;
+
+		// We're only going to do six days, no need to check today as the only reason to call this is if
+		// today had no attendance
+
+		$date->sub($one_day);
+
+		if($this->status[$date->format("Y-m-d")]->shift_pattern->day_off)
+		{
+			$break = 1;
+		}else{
+			$break = 0;
+		}
+
+		for($i=0;$i<6;$i++)
+		{
+			$dv = $date->format("Y-m-d");
+
+			if(!isset($this->status[$dv]->attendance) || ($i > $break && $this->status[$dv]->shift_pattern->day_off))
+			{ // We've hit the previous weekend and don't want to count any prior attendance or there's no more records to check
+				break;
+			}
+
+			if(!$this->status[$dv]->attendance->no_records)
+			{
+				$attendance++;
+			}
+
+			$date->sub($one_day);
+		}
+
+		return $attendance;
 	}
 
 }
