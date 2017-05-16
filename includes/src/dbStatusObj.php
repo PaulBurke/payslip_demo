@@ -10,7 +10,7 @@ class dbStatusObj extends dbObj
 	protected $stmt_status_at_date;
 
 	public function statusAtDate($date = false)
-	{
+	{		
 		if(!$date)
 		{
 			$date = new DateTime("now",system_constants::getTimezone());

@@ -27,6 +27,13 @@ class attendance_record extends dbObj
 
 		$this->empid = $empid;
 
+		if(!intCheck::test($this->empid))
+		{
+			$this->error = new errorAlert("ar0", "$this->empid is not a valid employee ID.\nAn employee ID should only contain numbers",
+										$_SERVER['PHP_SELF'],__LINE__);
+			return false;
+		}
+
 		if(!$this->stmt_read_all)
 		{
 			$this->stmt_read_all = $this->link->prepare("SELECT `id`, `timestamp`, UNIX_TIMESTAMP(`timestamp`) FROM `attendance_records` WHERE `emp_id` = ? && `timestamp` > ? && `timestamp` < ? ORDER BY `timestamp` ASC");

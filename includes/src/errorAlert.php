@@ -10,15 +10,16 @@ class errorAlert
 
 	public function json()
 	{
-		return json_encode(['error' => true, 'message' => "Error No: $this->id || $this->message"]);
+		return json_encode(['error' => 1, 'message' => "Error No: $this->id || $this->message"]);
 	}
 
-	public function __construct($id, $message, $script, $line)
+	public function __construct($id, $message, $script, $line, $log = true)
 	{
 		$this->id = $id;
 		$this->message = $message;
 		$this->script = $script;
 		$this->line = $line;
+		$this->log = $log;
 
 		return $this;
 	}

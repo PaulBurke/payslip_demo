@@ -10,6 +10,13 @@ class department_assignment extends dbStatusObj
 
 	public function statusAtDate($date = false)
 	{
+		if(!intCheck::test($this->empid))
+		{
+			$this->error = new errorAlert("dep0", "$this->empid is not a valid employee ID.\nAn employee ID should only contain numbers",
+										$_SERVER['PHP_SELF'],__LINE__);
+			return false;
+		}
+
 		if(!$date)
 		{
 			$date = new DateTime("now",system_constants::getTimezone());

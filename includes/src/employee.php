@@ -26,6 +26,22 @@ class employee extends dbObj
 
 	private $attendance_times = [];
 
+	/*
+	Methods:
+	__construct($id = false, &$link = false) 	| Gets basic details if given an employee ID
+	get($id) 									| Calls the read function
+	read()										| Generates the prepared statement if not yet ready and reads info from database
+	getStatus($start, $end = false)				| Daily status details are used by all the subsequent daily details
+	getShiftPatterns($start, $end = false)		| Shift patterns are used by attendance and payroll
+	getContractDetails($start, $end = false)	| Contract details are used by payroll
+	getAttendance($start, $end = false)			| Attendance is used by payroll
+	getPayroll($start, $end = false)			| Pulls together all the above functions to generate a payroll value
+	checkLastWeekAttendance($date = false)		| Checks to see if the employee has attendance for the previous workdays.
+
+	If the date values are known in advance then it's quicker to call the individual functions with the full date range rather than letting the
+	subsequent functions call individual days as they can't find them.
+	*/
+
 	public function __construct($id = false, &$link = false)
 	{
 		if(!parent::__construct($link))
@@ -49,6 +65,13 @@ class employee extends dbObj
 
 	public function read()
 	{
+		if(!intCheck::test($this->id))
+		{
+			$this->error = new errorAlert("emp0", "$this->id is not a valid employee ID.\nAn employee ID should only contain numbers",
+										$_SERVER['PHP_SELF'],__LINE__);
+			return false;
+		}
+
 		if(!$this->stmt_read)
 		{
 			if(!$this->stmt_read = $this->link->prepare("SELECT `name`, `email` FROM `employees` WHERE `id` = ?"))
@@ -62,6 +85,24 @@ class employee extends dbObj
 		}
 
 		return parent::read();
+	}
+
+	public function readAll()
+	{
+		if(!$this->stmt_read_all)
+		{
+			$this->stmt_read_all = $this->link->prepare("SELECT `id`, `name`, `email` FROM `employees` ORDER BY `name`");
+
+			if(!$this->stmt_read_all)
+			{
+				$this->error = new errorAlert("emp2", $this->link->error, $_SERVER['PHP_SELF'],__LINE__);
+				return false;
+			}
+
+			$this->stmt_read_all->bind_result($this->id, $this->name, $this->email);
+		}
+
+		return parent::readAll();
 	}
 
 	public function getStatus($start, $end = false)
@@ -382,6 +423,22 @@ class employee extends dbObj
 			{
 				$attendance = 0;
 				$weekly_rollup_hours = 0;
+			}
+
+			if(!isset($this->status[$date]->attendance))
+			{
+				if(!$this->getAttendance($cur_date))
+				{
+					return false;
+				}
+			}
+
+			if(!isset($this->status[$date]->contract))
+			{
+				if(!$this->getContractDetails($cur_date))
+				{
+					return false;
+				}
 			}
 
 			$date = $cur_date->format("Y-m-d");

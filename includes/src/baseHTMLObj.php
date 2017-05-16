@@ -4,31 +4,71 @@ class baseHTMLObj
 {
 	public $id;
 	public $class;
-	protected $config_string;
+	protected $config_string = "";
 	protected $content_string = "";
 
 	protected $content = [];
+	protected $properties = [];
+	protected $functions = [];
 
-
-	public function render()
+	public function addElement($var, $pos = false)
 	{
-		if($this->id)
+		if($pos !== false)
 		{
-			$id = "id='$this->id'";
+			$this->content = array_splice($this->content, $pos, 0, $var);
 		}else{
-			$id = "";
+			$this->content[] = $var;
 		}
 
-		if($this->class)
+		return $var;
+	}
+
+	public function addContent($var)
+	{
+		$this->content[] = $var;
+	}
+
+	public function addFunction($event, $action, $vars=['this'])
+	{
+		$this->functions[] = [$event, $action, $vars];
+	}
+
+	protected function renderFunctions()
+	{
+		$functions = "";
+
+		foreach($this->functions as $f)
 		{
-			$class = "class='$this->class'";
-		}else{
-			$class = "";
+			$functions .= " ".$f[0]."='".$f[1]."(".implode(",",$f[2]).");'";
 		}
 
-		$this->config_string = trim("$id $class");
+		$this->config_string .= $functions;
 
+		return $this;
+	}
 
+	public function addProperty($name, $value = false)
+	{
+		$this->properties[] = [$name, $value];
+	}
+
+	public function renderProperties()
+	{
+		foreach($this->properties as $p)
+		{
+			if($p[1])
+			{
+				$value = "='".$p[1]."'";
+			}else{
+				$value = "";
+			}
+
+			$this->config_string .= " ".$p[0].$value;
+		}
+	}
+
+	protected function renderContent()
+	{
 		foreach($this->content as $c)
 		{
 			$type = gettype($c);
@@ -38,12 +78,34 @@ class baseHTMLObj
 				case "object":
 					$this->content_string .= $c->render();
 					break;
-				case "string":
-					$this->content_string .= $c;
-					break;
-			}
 
+				default:
+					$this->content_string .= $c;
+			}
 		}
+
+		return $this;
+	}
+
+	public function render()
+	{
+		if($this->id)
+		{
+			$this->config_string .= "id='$this->id'";
+		}
+
+		if($this->class)
+		{
+			$this->config_string .= " class='$this->class'";
+		}
+
+		$this->renderProperties();
+
+		$this->renderFunctions();
+
+		$this->renderContent();
+
+		return $this;
 	}
 
 }

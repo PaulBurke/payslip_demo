@@ -26,6 +26,15 @@ class shift_pattern_detail extends dbObj
 		}
 
 		$this->sp_id = $sp_id;
+
+		if(!intCheck::test($this->sp_id))
+		{
+			$this->error = new errorAlert("spd0", "$this->sp_id is not a valid Shift Pattern identifier.",
+										$_SERVER['PHP_SELF'],__LINE__);
+			return false;
+		}
+
+
 		$this->day_no = $date->format("N");
 
 		$this->cur_date = $date->format("Y-m-d");

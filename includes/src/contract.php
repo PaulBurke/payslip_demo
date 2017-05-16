@@ -30,6 +30,13 @@ class contract extends dbStatusObj
 
 	public function statusAtDate($date = false)
 	{
+		if(!intCheck::test($this->empid))
+		{
+			$this->error = new errorAlert("con0", "$this->empid is not a valid employee ID.\nAn employee ID should only contain numbers",
+										$_SERVER['PHP_SELF'],__LINE__);
+			return false;
+		}
+
 		$this->date = $this->soc;
 
 		if(parent::statusAtDate($date))
@@ -65,7 +72,7 @@ class contract extends dbStatusObj
 
 			if(!$this->stmt_status_at_date)
 			{
-				$this->error = new errorAlert("ool1", $this->link->error, $_SERVER['PHP_SELF'],__LINE__);
+				$this->error = new errorAlert("con1", $this->link->error, $_SERVER['PHP_SELF'],__LINE__);
 				return false;
 			}
 

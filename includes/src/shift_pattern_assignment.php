@@ -14,6 +14,13 @@ class shift_pattern_assignment extends dbStatusObj
 
 	public function statusAtDate($date = false)
 	{
+		if(!intCheck::test($this->dept_id))
+		{
+			$this->error = new errorAlert("spa0", "$this->dept_it is not a valid Department.",
+										$_SERVER['PHP_SELF'],__LINE__);
+			return false;
+		}
+
 		if(parent::statusAtDate($date))
 		{
 			return true;

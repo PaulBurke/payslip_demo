@@ -8,7 +8,7 @@ class validator
 	{
 		$result = preg_match(static::$pattern, $val);
 
-		if(!static::$inv)
+		if(static::$inv)
 		{
 			$result = !$result;
 		}
