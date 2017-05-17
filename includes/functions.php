@@ -1,20 +1,18 @@
 <?php
 require_once("autoloader.php");
 
-function generatePayslip($empid, $start, $end = false)
+function generatePayslip($empid, $start, $end = false, $email = false)
 {
 	if(!intCheck::test($empid))
 	{
 		$error = new errorAlert("ps1", "$empid is not a valid value for employee ID.", $_SERVER['PHP_SELF'],__LINE__, false);
-		print $error->json();
-		exit;
+		return $error;
 	}
 
 	if(!dateCheck::test($start))
 	{
 		$error = new errorAlert("ps2", "Invalid value for start date.", $_SERVER['PHP_SELF'],__LINE__, false);
-		print $error->json();
-		exit;
+		return $error;
 	}
 
 	$start = new DateTime($start, system_constants::getTimezone());
@@ -32,8 +30,8 @@ function generatePayslip($empid, $start, $end = false)
 
 	if(!$employee = new employee($empid))
 	{
-		print $employee->error->json();
-		exit;
+		$error =  $employee->error->json();
+		return $error;
 	}
 
 	$timezone = system_constants::getTimezone();
@@ -41,8 +39,6 @@ function generatePayslip($empid, $start, $end = false)
 	$cur_date = clone $start;
 
 	$one_day = new DateInterval("P1D");
-
-	print "Name: $employee->name <br><br>";
 
 	if(!$employee->getStatus($start, $end))
 	{
@@ -77,7 +73,7 @@ function generatePayslip($empid, $start, $end = false)
 	$table = new table;
 	$table->class = "table table-striped table-hover";
 
-	$headings = ["Day","Date","Day Start", "Lunch Start", "Lunch End", "Day End", "Standard Time", "Overtime", "Total Hours", "Value", "Comment"];
+	$headings = ["Day","Date","Department","Day Start", "Lunch Start", "Lunch End", "Day End", "Standard Time", "Overtime", "Total Hours", "Value", "Comment"];
 
 	$table->addRow($headings, "thead");
 
@@ -90,12 +86,64 @@ function generatePayslip($empid, $start, $end = false)
 	$total_st = 0;
 	$total_ot = 0;
 
+	$summary_table = new table;
+	$summary_table->class = "table table-bordered table-striped table-hover";
+
+	$summary_table->addRow(["Name:", $employee->name]);
+	$summary_table->addRow(["Emp ID:", $employee->id]);
+
+	$eoc_date = new DateTime($employee->status[$start->format("Y-m-d")]->contract->eoc, system_constants::getTimezone());
+	$contract_date = clone $start;
+
+	if($eoc_date < $end)
+	{
+		while($contract_date < $end)
+		{
+			$date = $contract_date->format("Y-m-d");
+
+			$eoc_date = new DateTime($employee->status[$date]->contract->eoc, system_constants::getTimezone());
+
+			$row = $summary_table->addRow();
+			$cell = $row->addCell("Contract ".$employee->status[$date]->contract->soc." to ".$eoc_date->format("Y-m-d"));
+			$cell->addProperty("colspan", 2);
+
+			$summary_table->addRow(["Position:", $employee->status[$date]->contract->position]);
+			$salary = $employee->status[$date]->contract->basic_currency_symbol." ".number_format($employee->status[$date]->contract->basic,0)." per ".$employee->status[$date]->contract->basic_recurrence;
+
+			$summary_table->addRow(["Basic Salary:", $salary]);
+
+			if($employee->status[$date]->contract->ot_eligible)
+			{
+				$overtime_after = $employee->status[$date]->contract->base_hours." hours per ".$employee->status[$date]->contract->base_hours_recurrence;
+				$summary_table->addRow(["Overtime After:", $overtime_after]);
+			}
+
+			$contract_date = clone $eoc_date;
+			$contract_date->add($one_day);
+		}
+	}else{
+
+		$date = $start->format("Y-m-d");
+
+		$summary_table->addRow(["Position:", $employee->status[$date]->contract->position]);
+		$salary = $employee->status[$date]->contract->basic_currency_symbol." ".number_format($employee->status[$date]->contract->basic,0)." per ".$employee->status[$date]->contract->basic_recurrence;
+
+		$summary_table->addRow(["Basic Salary:", $salary]);
+
+		if($employee->status[$date]->contract->ot_eligible)
+		{
+			$overtime_after = $employee->status[$date]->contract->base_hours." hours per ".$employee->status[$date]->contract->base_hours_recurrence;
+			$summary_table->addRow(["Overtime After:", $overtime_after]);
+		}
+	}
+
+
 	while($cur_date <= $end)
 	{
 		$date = $cur_date->format("Y-m-d");
 		$day = $cur_date->format("l");
 		
-		$arr = [$date, $day];
+		$arr = [$date, $day, $employee->status[$date]->dept_name];
 
 		foreach($time_types as $tt)
 		{
@@ -115,7 +163,7 @@ function generatePayslip($empid, $start, $end = false)
 			{
 				$arr[] = "-";
 			}else{
-				$arr[] = $employee->status[$date]->payroll->{$t};
+				$arr[] = number_format($employee->status[$date]->payroll->{$t},2);
 			}
 
 			${"total_$t"} += $employee->status[$date]->payroll->{$t};
@@ -171,7 +219,17 @@ function generatePayslip($empid, $start, $end = false)
 		$arr[] = $employee->status[$date]->attendance->comment;
 
 
-		$table->addRow($arr);
+		$row = $table->addRow($arr);
+
+		if($employee->status[$date]->shift_pattern->day_off || $employee->status[$date]->shift_pattern->holiday)
+		{
+			$row->class = "attendance-day-off";
+		}else if($employee->status[$date]->on_leave){
+			$row->class = "attendance-on-leave";
+		}else if($employee->status[$date]->attendance->no_records){
+			$row->class = "attendance-absent";
+		}
+
 		$cur_date->add($one_day);
 	}
 
@@ -184,6 +242,8 @@ function generatePayslip($empid, $start, $end = false)
 		if(${$t} == 0)
 		{
 			${$t} = "-";
+		}else{
+			${$t} = number_format(${$t},2);
 		}
 	}
 
@@ -206,10 +266,14 @@ function generatePayslip($empid, $start, $end = false)
 	}
 
 
-	$arr = [NULL,NULL,NULL,NULL,NULL,NULL,$total_st, $total_ot, $total_hours, $total_value, NULL];
+	$arr = [NULL,NULL,NULL,NULL,NULL,NULL,"Total:",$total_st, $total_ot, $total_hours, $total_value, NULL];
 
 	$table->addRow($arr, "tfoot");
 
-	print $table->render();
+	$summary_table = "<div class='col-sm-6 col-xs-12'>".$summary_table->render()."</div>";
 
+	return [
+			'error' => 0,
+			'result' => $summary_table.$table->render()
+			];
 }
