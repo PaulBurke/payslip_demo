@@ -75,6 +75,17 @@ require_once("functions.php");
 				bottom: 0;
 				right: 0;
 			}
+
+			button,
+			label
+			{
+				margin-left:5px;
+			}
+
+			form
+			{
+				padding: 5px;
+			}
 		</style>
 	</head>
 	<body>
@@ -118,11 +129,27 @@ $end->label = "End Date:";
 $end->addProperty("value", "2017-03-31");
 $end->id = "end_date";
 
-$button = $form->addElement(new button);
+$button_base = new button;
+$button_base->class = "btn btn-primary";
+
+$button = $form->addElement(clone $button_base);
 
 $button->addFunction("onclick", "getPayslip");
-$button->class = "btn btn-primary";
 $button->addContent("Submit");
+
+$email = $form->addElement(new input);
+$email->label = "E-Mail: ";
+$email->id = "email";
+$email->class = "form-control";
+
+$button = $form->addElement(clone $button_base);
+$button->addFunction("onclick", "sendPayslip");
+$button->addContent("<i class='fa fa-envelope'></i> Send Payslip");
+
+$button = $form->addElement(clone $button_base);
+$button->addFunction("onclick", "sendPayslip", ["this", "\"all\""]);
+$button->addContent("<i class='fa fa-envelope'></i> Send All Payslips");
+$button->class = "btn btn-danger";
 
 print $form->render();
 
@@ -137,9 +164,6 @@ print $form->render();
 <script>
 	function getPayslip(el)
 	{
-		// var event = window.event;
-		// event.stopPropagation();
-
 		var empid = document.getElementById("empid");
 
 		if(empid.value < 0)
@@ -178,6 +202,67 @@ print $form->render();
 					document.getElementById("report").innerHTML = data.result;
 					stopWorking();
 					return false;
+				},
+				error: function()
+				{
+					alert("Something went wrong, please contact a system administrator.");
+					stopWorking();
+					return false;
+				}
+
+		});
+	}
+
+	function sendPayslip(el, all)
+	{
+		var empid = document.getElementById("empid");
+		var email = document.getElementById("email");
+
+		var pattern = new RegExp(/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$/);
+		
+		if(!pattern.test(email.value))
+		{
+			alert("Please enter a valid e-mail address");
+			return false;
+		}
+
+		if(typeof(all) == "undefined")
+		{
+			if(empid.value < 0)
+			{
+				alert("Please select an employee from the list before proceeding");
+				return false;
+			}else{
+				var id = empid.value;
+			}
+		}else{
+			var id = "all";
+		}
+
+		var start = document.getElementById("start_date");
+		var end = document.getElementById("end_date");
+
+		working();
+
+		$.ajax({
+				url: 	"/funcs/mail_payslip.php",
+				type: 	"POST",
+				data: 	{'empid': id, 'start': start.value, 'end': end.value, 'email': email.value},
+				success: function(data_json)
+				{
+					try
+					{
+						var data = JSON.parse(data_json);
+					}catch(e){
+						alert("Data retrieval failure. Please try again.");
+						stopWorking();
+						return false;
+					}
+
+					alert(data.message);
+					stopWorking();
+					return false;
+
 				},
 				error: function()
 				{

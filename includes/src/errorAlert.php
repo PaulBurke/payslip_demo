@@ -10,7 +10,7 @@ class errorAlert
 
 	public function json()
 	{
-		return json_encode(['error' => 1, 'message' => "Error No: $this->id || $this->message"]);
+		return json_encode($this->arr());
 	}
 
 	public function __construct($id, $message, $script, $line, $log = true)
@@ -30,5 +30,10 @@ class errorAlert
 		{
 			error_log("Error $this->id || $this->message || Occured In $this->script on line $this->line");
 		}
+	}
+
+	public function arr()
+	{
+		return ['error' => 1, 'message' => "Error No: $this->id || $this->message"];
 	}
 }

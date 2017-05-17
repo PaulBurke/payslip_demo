@@ -57,6 +57,19 @@ class employee extends dbObj
 
 	}
 
+	public function setID($id)
+	{
+		if(!intCheck::test($id))
+		{
+			$this->error = new errorAlert("emp", "$id is not a valid employee ID.\nAn employee ID should contain only numbers.");
+			return false;
+		}
+
+		$this->status = [];
+
+		return $this->get($id);
+	}
+
 	public function get($id)
 	{
 		$this->id = $id;

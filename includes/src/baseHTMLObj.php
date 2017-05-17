@@ -8,6 +8,7 @@ class baseHTMLObj
 	protected $content_string = "";
 	public $label = false;
 
+	protected $style = [];
 	protected $content = [];
 	protected $properties = [];
 	protected $functions = [];
@@ -88,6 +89,53 @@ class baseHTMLObj
 		return $this;
 	}
 
+	public function addStyle($key, $value, $clear = false)
+	{
+		if(isset($this->style[$key]))
+		{
+			if($clear)
+			{
+				unset($this->style[$key]);
+			}else{
+				$this->style[$key] = $value;
+			}
+		}else{
+			$this->style[$key] = $value;
+		}
+	}
+
+	public function addStyleObj(&$obj)
+	{
+		$this->style = &$obj;
+	}
+
+	public function renderStyle()
+	{
+		if(gettype($this->style) == "object")
+		{
+			$this->config_string .= " ".$this->style->getStyle();
+			return $this;
+		}
+
+		if(count($this->style) < 1)
+		{
+			return false;
+		}
+
+		$style = "";
+
+		$style_keys = array_keys($this->style);
+
+		foreach($style_keys as $sk)
+		{
+			$v = $this->style[$sk];
+
+			$style .= "$sk:$v; ";
+		}
+
+		$this->config_string .= " style='$style'";
+	}
+
 	public function render()
 	{
 		if($this->id)
@@ -105,6 +153,8 @@ class baseHTMLObj
 		$this->renderFunctions();
 
 		$this->renderContent();
+
+		$this->renderStyle();
 
 		return $this;
 	}

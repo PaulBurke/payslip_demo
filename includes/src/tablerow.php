@@ -36,4 +36,14 @@ class tablerow extends baseHTMLObj
 
 		return $row;
 	}
+
+	public function setCellsStyle(&$obj)
+	{
+		foreach($this->content as $c)
+		{
+			$c->addStyleObj($obj);
+		}
+
+		return $this;
+	}
 }

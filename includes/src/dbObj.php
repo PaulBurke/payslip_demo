@@ -45,6 +45,7 @@ class dbObj
 		if($this->stmt_read->num_rows < 1)
 		{
 			$this->error = new errorAlert("db_read_2", "No records found.", $_SERVER['PHP_SELF'],__LINE__);
+			$this->error->log = false;
 			$this->error->fatal = false;
 			return false;
 		}
@@ -67,6 +68,7 @@ class dbObj
 		if($this->stmt_read_all->num_rows < 1)
 		{
 			$this->error = new errorAlert("db_read_4", "No records found.", $_SERVER['PHP_SELF'],__LINE__);
+			$this->error->log = false;
 			$this->error->fatal = false;
 			return false;
 		}

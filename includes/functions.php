@@ -6,13 +6,13 @@ function generatePayslip($empid, $start, $end = false, $email = false)
 	if(!intCheck::test($empid))
 	{
 		$error = new errorAlert("ps1", "$empid is not a valid value for employee ID.", $_SERVER['PHP_SELF'],__LINE__, false);
-		return $error;
+		return $error->arr();
 	}
 
 	if(!dateCheck::test($start))
 	{
 		$error = new errorAlert("ps2", "Invalid value for start date.", $_SERVER['PHP_SELF'],__LINE__, false);
-		return $error;
+		return $error->arr();
 	}
 
 	$start = new DateTime($start, system_constants::getTimezone());
@@ -31,7 +31,7 @@ function generatePayslip($empid, $start, $end = false, $email = false)
 	if(!$employee = new employee($empid))
 	{
 		$error =  $employee->error->json();
-		return $error;
+		return $error->arr();
 	}
 
 	$timezone = system_constants::getTimezone();
@@ -42,20 +42,17 @@ function generatePayslip($empid, $start, $end = false, $email = false)
 
 	if(!$employee->getStatus($start, $end))
 	{
-		print $employee->error->json;
-		exit;
+		return $employee->arr();
 	}
 
 	if(!$employee->getShiftPatterns($start, $end))
 	{
-		print $employee->error->json();
-		exit;
+		return $employee->arr();
 	}
 
 	if(!$employee->getContractDetails($start, $end))
 	{
-		print $employee->error->json();
-		exit;
+		return $employee->arr();
 	}
 
 	if(!$employee->getAttendance($start,$end))
@@ -66,16 +63,68 @@ function generatePayslip($empid, $start, $end = false, $email = false)
 
 	if(!$employee->getPayroll($start, $end))
 	{
-		print $employee->error->json();
-		exit;
+		return $employee->arr();
 	}
 
 	$table = new table;
 	$table->class = "table table-striped table-hover";
 
+	$summary_table = new table;
+	$summary_table->class = "table table-bordered table-striped table-hover";
+
+	if($email)
+	{
+		$table->addStyle("border-collapse", "collapse");
+		$summary_table->addStyle("border-collapse", "collapse");
+
+		$heading_style = new styleObj;
+		$heading_style->add("min-width", "100px")
+					  ->add("padding", "0px")
+					  ->add("padding-left", "5px")
+					  ->add("padding-right", "5px")
+					  ->add("border-bottom", "#808080 2.0pt solid");
+
+		$summary_style = new styleObj;
+		$summary_style->add("border", "#808080 1.0pt solid")
+					  ->add("padding-left", "5px")
+					  ->add("padding-right", "5px");
+
+		$row_style_base = new styleObj;
+		$row_style_base->add("border-bottom", "#808080 1.0pt solid")
+					   ->add("padding", "0px")
+					   ->add("padding-left", "5px")
+					   ->add("padding-right", "5px");
+
+		$row_style_even = clone $row_style_base;
+
+		$colours = [
+			['odd', '#DDD'],
+			['day_off_even', '#DAEFE2'],
+			['day_off_odd', '#B4E0C6'],
+			['out_on_leave_even', '#D6E4FC'],
+			['out_on_leave_odd', '#ADCBF8'],
+			['late_even', '#F7EBDD'],
+			['late_odd', '#EED7BD'],
+			['absent_even', '#FF6767'],
+			['absent_odd', '#FF4D4D'],
+		];
+
+		foreach($colours as $c)
+		{
+			${"row_style_".$c[0]} = clone $row_style_base;
+			${"row_style_".$c[0]}->add("background-color", $c[1]);
+		}
+	}
+	
+
 	$headings = ["Day","Date","Department","Day Start", "Lunch Start", "Lunch End", "Day End", "Standard Time", "Overtime", "Total Hours", "Value", "Comment"];
 
-	$table->addRow($headings, "thead");
+	$heading = $table->addRow($headings, "thead");
+
+	if($email)
+	{
+		$heading->setCellsStyle($heading_style);
+	}
 
 	$time_types = ['day_start', 'lunch_start', 'lunch_end', 'day_end'];
 
@@ -86,11 +135,11 @@ function generatePayslip($empid, $start, $end = false, $email = false)
 	$total_st = 0;
 	$total_ot = 0;
 
-	$summary_table = new table;
-	$summary_table->class = "table table-bordered table-striped table-hover";
+	$summary_rows = [];
 
-	$summary_table->addRow(["Name:", $employee->name]);
-	$summary_table->addRow(["Emp ID:", $employee->id]);
+	$summary_rows[] = $summary_table->addRow(["Name:", $employee->name]);
+	$summary_rows[] = $summary_table->addRow(["Emp ID:", $employee->id]);
+
 
 	$eoc_date = new DateTime($employee->status[$start->format("Y-m-d")]->contract->eoc, system_constants::getTimezone());
 	$contract_date = clone $start;
@@ -104,18 +153,30 @@ function generatePayslip($empid, $start, $end = false, $email = false)
 			$eoc_date = new DateTime($employee->status[$date]->contract->eoc, system_constants::getTimezone());
 
 			$row = $summary_table->addRow();
+			$summary_rows[] = $row;
 			$cell = $row->addCell("Contract ".$employee->status[$date]->contract->soc." to ".$eoc_date->format("Y-m-d"));
 			$cell->addProperty("colspan", 2);
 
-			$summary_table->addRow(["Position:", $employee->status[$date]->contract->position]);
+			$summary_rows[] = $summary_table->addRow(["Position:", $employee->status[$date]->contract->position]);
 			$salary = $employee->status[$date]->contract->basic_currency_symbol." ".number_format($employee->status[$date]->contract->basic,0)." per ".$employee->status[$date]->contract->basic_recurrence;
 
-			$summary_table->addRow(["Basic Salary:", $salary]);
+			$summary_rows[] = $summary_table->addRow(["Basic Salary:", $salary]);
+
+			// if($email)
+			// {
+			// 	$row->setCellsStyle($summary_style);
+			// 	$row2->setCellsStyle($summary_style);
+			// 	$row3->setCellsStyle($summary_style);
+			// }
 
 			if($employee->status[$date]->contract->ot_eligible)
 			{
 				$overtime_after = $employee->status[$date]->contract->base_hours." hours per ".$employee->status[$date]->contract->base_hours_recurrence;
-				$summary_table->addRow(["Overtime After:", $overtime_after]);
+				$summary_rows[] = $summary_table->addRow(["Overtime After:", $overtime_after]);
+
+				// if($email)
+				// {
+				// 	$row->setCellsStyle($summary_style);
 			}
 
 			$contract_date = clone $eoc_date;
@@ -125,21 +186,40 @@ function generatePayslip($empid, $start, $end = false, $email = false)
 
 		$date = $start->format("Y-m-d");
 
-		$summary_table->addRow(["Position:", $employee->status[$date]->contract->position]);
+		$summary_rows[] = $summary_table->addRow(["Position:", $employee->status[$date]->contract->position]);
 		$salary = $employee->status[$date]->contract->basic_currency_symbol." ".number_format($employee->status[$date]->contract->basic,0)." per ".$employee->status[$date]->contract->basic_recurrence;
 
-		$summary_table->addRow(["Basic Salary:", $salary]);
+		$summary_rows[] = $summary_table->addRow(["Basic Salary:", $salary]);
 
 		if($employee->status[$date]->contract->ot_eligible)
 		{
 			$overtime_after = $employee->status[$date]->contract->base_hours." hours per ".$employee->status[$date]->contract->base_hours_recurrence;
-			$summary_table->addRow(["Overtime After:", $overtime_after]);
+			$summary_rows[] = $summary_table->addRow(["Overtime After:", $overtime_after]);
 		}
 	}
 
+	if($email)
+	{
+		foreach($summary_rows as $sr)
+		{
+			$sr->setCellsStyle($summary_style);
+		}
+	}
+	
+
+	$count = 0;
 
 	while($cur_date <= $end)
 	{
+		if($count%2)
+		{
+			$parity = "_odd";
+		}else{
+			$parity = "_even";
+		}
+
+		$email_style = false;
+
 		$date = $cur_date->format("Y-m-d");
 		$day = $cur_date->format("l");
 		
@@ -221,16 +301,33 @@ function generatePayslip($empid, $start, $end = false, $email = false)
 
 		$row = $table->addRow($arr);
 
+
+
 		if($employee->status[$date]->shift_pattern->day_off || $employee->status[$date]->shift_pattern->holiday)
 		{
 			$row->class = "attendance-day-off";
+			$email_style = "row_style_day_off$parity";
 		}else if($employee->status[$date]->on_leave){
 			$row->class = "attendance-on-leave";
+			$email_style = "row_style_out_on_leave$parity";
 		}else if($employee->status[$date]->attendance->no_records){
 			$row->class = "attendance-absent";
+			$email_style = "row_style_absent$parity";
 		}
 
+		if($email)
+		{
+			if(!$email_style)
+			{
+				$email_style = "row_style$parity";
+			}
+
+			$row->setCellsStyle(${$email_style});
+		}
+
+
 		$cur_date->add($one_day);
+		$count++;
 	}
 
 	$total_hours = $total_st + $total_ot;
@@ -270,7 +367,7 @@ function generatePayslip($empid, $start, $end = false, $email = false)
 
 	$table->addRow($arr, "tfoot");
 
-	$summary_table = "<div class='col-sm-6 col-xs-12'>".$summary_table->render()."</div>";
+	$summary_table = "<div class='col-sm-6 col-xs-12'>".$summary_table->render()."</div><br><br>";
 
 	return [
 			'error' => 0,
