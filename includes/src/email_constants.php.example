@@ -1,11 +1,20 @@
 <?php
 class email_constants
 {
+	/*
+		To get this to work with gmail either allow Less Secure Apps
+		https://support.google.com/accounts/answer/6010255
+		or enable two-factor authentication and generate an app password
+		for use with this.
+	*/
+
+	public static $sender = "sender";
+	public static $sender_name = "Sender Name";
 	public static $address = "address";
 	public static $password = "password";
-	public static $SMTPAuth = true;
-	public static $SMTPSecure = "smtp";
-	public static $port = "465";
+	public static $port = "587";
 	public static $host = "smtp.gmail.com";
-	public static $connection = "ssl";
+	public static $connection = "tls";
+	public static $user = "user";
+	public static $smtpauth = true;
 }
