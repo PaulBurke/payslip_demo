@@ -1,5 +1,5 @@
 <?php
-require_once("autoloader.php");
+require_once("vendor/autoload.php");
 
 function generatePayslip($empid, $start, $end = false, $email = false)
 {
