@@ -2,8 +2,8 @@
 
 class table extends baseHTMLObj
 {
-	protected $header = [];
-	protected $footer = [];
+	protected $thead = [];
+	protected $tfoot = [];
 
 	public function addRow($content = [], $area = "tbody")
 	{
@@ -14,9 +14,14 @@ class table extends baseHTMLObj
 			$head = false;
 		}
 
+		if($area == "tbody")
+		{
+			$area = "content";
+		}
+
 		$row = new tablerow($content, $head);
 
-		$this->content[] = $row;
+		$this->{$area}[] = $row;
 
 		return $row;
 	}
@@ -46,11 +51,27 @@ class table extends baseHTMLObj
 
 	public function render()
 	{
-		$this->content = array_merge($this->header, $this->content, $this->footer);
+		foreach(['thead', 'tfoot'] as $area)
+		{
+
+			if(count($this->{$area}) > 0)
+			{
+				${$area} = "<$area>";
+
+				foreach($this->{$area} as $row)
+				{
+					${$area} .= $row->render();
+				}
+
+				${$area} .= "</$area>";
+			}else{
+				${$area} = "";
+			}
+		}
 
 		parent::render();
 
-		$table = "<table $this->config_string>$this->content_string</table>";
+		$table = "<table $this->config_string> $thead <tbody> $this->content_string </tbody> $tfoot </table>";
 
 		return $table;
 	}

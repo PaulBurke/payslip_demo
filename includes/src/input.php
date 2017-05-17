@@ -9,7 +9,7 @@ class input extends baseHTMLObj
 
 		$input = "<input $this->config_string />";
 
-		return $input;
+		return $this->checkLabel($input);
 	}
 		
 }

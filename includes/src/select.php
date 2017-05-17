@@ -19,6 +19,6 @@ class select extends baseHTMLObj
 
 		$select = "<select $this->config_string> $this->content_string </select>";
 
-		return $select;
+		return $this->checkLabel($select);
 	}
 }

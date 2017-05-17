@@ -42,7 +42,7 @@ class dbStatusObj extends dbObj
 
 		$this->stmt_status_at_date->fetch();
 
-		$this->{$property} = new DateTime($this->date, system_constants::getTimezone());
+		$this->date = new DateTime($this->{$property}, system_constants::getTimezone());
 
 		return true;
 	}

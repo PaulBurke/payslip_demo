@@ -6,6 +6,7 @@ class baseHTMLObj
 	public $class;
 	protected $config_string = "";
 	protected $content_string = "";
+	public $label = false;
 
 	protected $content = [];
 	protected $properties = [];
@@ -108,4 +109,19 @@ class baseHTMLObj
 		return $this;
 	}
 
+	public function checkLabel($html)
+	{
+		if(!$this->label)
+		{
+			return $html;
+		}
+
+		$html = "
+		<div class='form-group'>
+			<label>$this->label</label>
+			$html
+		</div>";
+
+		return $html;
+	}
 }
